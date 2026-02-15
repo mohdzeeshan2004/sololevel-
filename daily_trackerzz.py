@@ -7,6 +7,7 @@ import plotly.express as px
 from collections import defaultdict
 import math
 import os
+import random
 
 # Set page config
 st.set_page_config(
@@ -79,18 +80,6 @@ st.markdown("""
             transform: translateX(0);
         }
     }
-    .task-card {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        padding: 15px;
-        border-radius: 8px;
-        margin: 8px 0;
-        border-left: 5px solid #667eea;
-        transition: all 0.3s ease;
-    }
-    .task-card:hover {
-        transform: translateX(5px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
     .achievement-badge {
         display: inline-block;
         background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
@@ -115,42 +104,102 @@ st.markdown("""
             opacity: 1;
         }
     }
-    .exp-bar {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    .motivation-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
         border-radius: 10px;
-        height: 30px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
         color: white;
-        font-weight: bold;
-        transition: width 0.5s ease;
+        margin: 10px 0;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        font-size: 18px;
+        font-style: italic;
     }
-    .stat-card {
+    .milestone-card {
+        background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+        padding: 15px;
+        border-radius: 10px;
+        color: white;
+        margin: 10px 0;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+    }
+    .streak-card {
+        background: linear-gradient(135deg, #FF6B6B 0%, #FFE66D 100%);
+        padding: 15px;
+        border-radius: 10px;
+        color: white;
+        margin: 10px 0;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+        font-weight: bold;
+    }
+    .reward-notification {
+        background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+        padding: 15px;
+        border-radius: 10px;
+        color: white;
+        margin: 10px 0;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(255, 165, 0, 0.4);
+        animation: pulse 0.5s ease;
+    }
+    @keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.05);
+        }
+    }
+    .daily-challenge {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 15px;
-        border-radius: 8px;
+        border-radius: 10px;
         color: white;
-        text-align: center;
-        margin: 5px 0;
+        margin: 10px 0;
+        border: 2px solid #FFD700;
     }
-    .save-status {
+    .progress-detail {
+        background: #f0f0f0;
         padding: 10px;
         border-radius: 5px;
         margin: 5px 0;
     }
-    .save-success {
-        background-color: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-    }
-    .save-warning {
-        background-color: #fff3cd;
-        color: #856404;
-        border: 1px solid #ffeaa7;
-    }
     </style>
 """, unsafe_allow_html=True)
+
+# Motivational quotes
+MOTIVATIONAL_QUOTES = [
+    "🌟 Every small step counts! Keep going!",
+    "💪 You're building a better version of yourself!",
+    "🚀 Success is the sum of small efforts repeated day after day!",
+    "⭐ Your consistency is your superpower!",
+    "🔥 Don't break the chain! Keep that streak alive!",
+    "🎯 Progress, not perfection!",
+    "💎 You're becoming unstoppable!",
+    "🏆 Your future self will thank you!",
+    "✨ Every task completed is a victory!",
+    "🌱 Small daily habits create big life changes!",
+    "👑 You are the hero of your own story!",
+    "⚡ Discipline is choosing what you want most over what you want now!",
+    "🎪 Fun fact: Winners never quit, quitters never win!",
+    "🌈 Today's effort = Tomorrow's success!",
+    "🎭 Your mind is your greatest superpower!",
+]
+
+DAILY_CHALLENGES = [
+    {"name": "Power Hour", "description": "Complete 3 tasks in one hour", "reward": 50},
+    {"name": "Perfect Day", "description": "Complete ALL tasks for the day", "reward": 100},
+    {"name": "Consistency King", "description": "Complete tasks 3 days in a row", "reward": 75},
+    {"name": "Early Bird", "description": "Complete a task before 9 AM", "reward": 30},
+    {"name": "Night Owl", "description": "Complete a task after 9 PM", "reward": 25},
+]
+
+TIER_EMOJIS = {
+    1: "🐤", 2: "🦅", 3: "🦁", 4: "🐉", 5: "👑",
+    10: "⭐", 20: "💫", 30: "✨", 50: "🌟", 100: "🏆"
+}
 
 # Data storage utilities
 DATA_DIR = "user_data"
@@ -198,7 +247,6 @@ def delete_save_file(filename):
 
 # Initialize session state
 if "user_data" not in st.session_state:
-    # Try to load existing data
     loaded_data = load_user_data()
     if loaded_data:
         st.session_state.user_data = loaded_data
@@ -215,10 +263,15 @@ if "user_data" not in st.session_state:
             "achievements": [],
             "last_level_up": None,
             "last_saved": None,
+            "total_tasks_completed": 0,
+            "total_exp_earned": 0,
+            "best_streak": 0,
+            "daily_bonus_claimed": False,
+            "last_bonus_date": None,
             "setup_complete": False
         }
 
-# Rank system (similar to PUBG)
+# Rank system
 RANK_SYSTEM = [
     {"rank": "BRONZE", "min_points": 0, "color": "#CD7F32", "emoji": "🥉"},
     {"rank": "SILVER", "min_points": 100, "color": "#C0C0C0", "emoji": "🥈"},
@@ -244,7 +297,6 @@ DIFFICULTY_EXP = {
     "legendary": 5
 }
 
-# Season info
 SEASONS = {
     1: {"name": "The Awakening", "start_date": "Jan 1", "end_date": "Mar 31"},
     2: {"name": "Rise of Power", "start_date": "Apr 1", "end_date": "Jun 30"},
@@ -263,7 +315,6 @@ CATEGORIES = {
     "health": "❤️"
 }
 
-# Achievements system
 ACHIEVEMENTS = {
     "first_task": {"name": "First Step", "description": "Complete your first task", "emoji": "👣"},
     "five_tasks": {"name": "Getting Started", "description": "Complete 5 tasks", "emoji": "🚀"},
@@ -271,8 +322,10 @@ ACHIEVEMENTS = {
     "fifty_tasks": {"name": "Warrior", "description": "Complete 50 tasks", "emoji": "⚔️"},
     "hundred_tasks": {"name": "Unstoppable", "description": "Complete 100 tasks", "emoji": "⚡"},
     "week_streak": {"name": "On Fire", "description": "Achieve 7-day streak", "emoji": "🔥"},
+    "month_streak": {"name": "Unstoppable Force", "description": "Achieve 30-day streak", "emoji": "💥"},
     "level_ten": {"name": "Rising Star", "description": "Reach Level 10", "emoji": "⭐"},
     "rank_gold": {"name": "Golden Champion", "description": "Reach Gold rank", "emoji": "👑"},
+    "rank_legend": {"name": "Legendary", "description": "Reach Legend rank", "emoji": "🌟"},
 }
 
 def get_current_rank(rank_points):
@@ -283,40 +336,33 @@ def get_current_rank(rank_points):
     return RANK_SYSTEM[0]
 
 def get_exp_needed_for_level(level):
-    """Calculate EXP needed to reach next level (scales with level)"""
+    """Calculate EXP needed to reach next level"""
     return 100 + (level - 1) * 50
 
 def check_achievements():
     """Check and award achievements"""
     user = st.session_state.user_data
-    total_completed = sum(len(tasks) for tasks in user["completion_history"].values())
+    total_completed = user.get("total_tasks_completed", 0)
     
     achievements_to_award = []
     
-    if total_completed == 1 and "first_task" not in user["achievements"]:
-        user["achievements"].append("first_task")
-        achievements_to_award.append("first_task")
-    elif total_completed == 5 and "five_tasks" not in user["achievements"]:
-        user["achievements"].append("five_tasks")
-        achievements_to_award.append("five_tasks")
-    elif total_completed == 10 and "ten_tasks" not in user["achievements"]:
-        user["achievements"].append("ten_tasks")
-        achievements_to_award.append("ten_tasks")
-    elif total_completed == 50 and "fifty_tasks" not in user["achievements"]:
-        user["achievements"].append("fifty_tasks")
-        achievements_to_award.append("fifty_tasks")
-    elif total_completed == 100 and "hundred_tasks" not in user["achievements"]:
-        user["achievements"].append("hundred_tasks")
-        achievements_to_award.append("hundred_tasks")
-    elif get_completion_streak() == 7 and "week_streak" not in user["achievements"]:
-        user["achievements"].append("week_streak")
-        achievements_to_award.append("week_streak")
-    elif user["level"] == 10 and "level_ten" not in user["achievements"]:
-        user["achievements"].append("level_ten")
-        achievements_to_award.append("level_ten")
-    elif user["rank"] == "GOLD" and "rank_gold" not in user["achievements"]:
-        user["achievements"].append("rank_gold")
-        achievements_to_award.append("rank_gold")
+    conditions = [
+        (total_completed == 1, "first_task"),
+        (total_completed == 5, "five_tasks"),
+        (total_completed == 10, "ten_tasks"),
+        (total_completed == 50, "fifty_tasks"),
+        (total_completed == 100, "hundred_tasks"),
+        (get_completion_streak() == 7, "week_streak"),
+        (get_completion_streak() == 30, "month_streak"),
+        (user["level"] == 10, "level_ten"),
+        (user["rank"] == "GOLD", "rank_gold"),
+        (user["rank"] == "LEGEND", "rank_legend"),
+    ]
+    
+    for condition, ach_id in conditions:
+        if condition and ach_id not in user["achievements"]:
+            user["achievements"].append(ach_id)
+            achievements_to_award.append(ach_id)
     
     return achievements_to_award
 
@@ -324,6 +370,7 @@ def add_experience(exp_amount):
     """Add experience and handle level up"""
     user = st.session_state.user_data
     user["experience"] += exp_amount
+    user["total_exp_earned"] = user.get("total_exp_earned", 0) + exp_amount
     leveled_up = False
     
     while user["experience"] >= user["exp_needed"]:
@@ -356,6 +403,7 @@ def mark_task_complete(task_id):
             leveled_up = add_experience(int(exp_earned))
             st.session_state.user_data["completion_history"][today].append(task_id)
             st.session_state.user_data["rank_points"] += 5
+            st.session_state.user_data["total_tasks_completed"] += 1
             achievements = check_achievements()
             return leveled_up, achievements
     
@@ -381,39 +429,58 @@ def get_completion_streak():
         else:
             break
     
+    if streak > st.session_state.user_data.get("best_streak", 0):
+        st.session_state.user_data["best_streak"] = streak
+    
     return streak
 
-# Sidebar Navigation with Save/Load
+def claim_daily_bonus():
+    """Claim daily bonus"""
+    today = get_today_key()
+    last_claimed = st.session_state.user_data.get("last_bonus_date")
+    
+    if last_claimed != today:
+        add_experience(25)
+        st.session_state.user_data["daily_bonus_claimed"] = True
+        st.session_state.user_data["last_bonus_date"] = today
+        save_user_data()
+        return True
+    return False
+
+# Sidebar
 st.sidebar.title("⚔️ Daily Tracker")
 
-# Auto-save reminder
 col_save1, col_save2 = st.sidebar.columns(2)
 with col_save1:
-    if st.button("💾 Save Data", key="save_btn", use_container_width=True):
-        success, result = save_user_data()
+    if st.button("💾 Save", key="save_btn", use_container_width=True):
+        success, _ = save_user_data()
         if success:
             st.session_state.user_data["last_saved"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            st.sidebar.success(f"✅ Data saved!")
-        else:
-            st.sidebar.error(f"❌ Save failed: {result}")
+            st.sidebar.success("✅ Saved!")
 
 with col_save2:
-    if st.button("📥 Load Data", key="load_btn", use_container_width=True):
+    if st.button("📥 Load", key="load_btn", use_container_width=True):
         loaded = load_user_data()
         if loaded:
             st.session_state.user_data = loaded
-            st.sidebar.success("✅ Data loaded!")
+            st.sidebar.success("✅ Loaded!")
             st.rerun()
-        else:
-            st.sidebar.warning("⚠️ No saved data found")
 
 st.sidebar.divider()
 
-# Show last save time
-if st.session_state.user_data.get("last_saved"):
-    st.sidebar.caption(f"Last saved: {st.session_state.user_data['last_saved']}")
+# Daily bonus
+today = get_today_key()
+if st.session_state.user_data.get("last_bonus_date") != today:
+    if st.sidebar.button("🎁 Claim Daily Bonus (+25 EXP)", use_container_width=True):
+        if claim_daily_bonus():
+            st.sidebar.success("🎉 +25 EXP claimed!")
+            st.rerun()
+else:
+    st.sidebar.caption("✅ Daily bonus claimed today!")
 
-page = st.sidebar.radio("Navigation", ["Dashboard", "Daily Quests", "Statistics", "Achievements", "Data Manager", "Settings"])
+st.sidebar.divider()
+
+page = st.sidebar.radio("Navigation", ["🏠 Home", "⚔️ Quests", "📊 Stats", "🏆 Achievements", "💾 Data", "⚙️ Settings"])
 
 # Main Header
 col1, col2, col3 = st.columns([2, 2, 1])
@@ -450,20 +517,32 @@ with col3:
 
 st.divider()
 
-# PAGE: Dashboard
-if page == "Dashboard":
+# Daily Motivation
+st.markdown(f"""
+<div class='motivation-card'>
+✨ {random.choice(MOTIVATIONAL_QUOTES)} ✨
+</div>
+""", unsafe_allow_html=True)
+
+# PAGE: Home/Dashboard
+if page == "🏠 Home":
     if len(st.session_state.user_data["daily_tasks"]) == 0:
-        st.warning("⚠️ No tasks created yet! Go to Daily Quests to add your first task.")
-        st.info("👉 Click on 'Daily Quests' in the sidebar to get started!")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.warning("⚠️ No quests yet! Create your first quest to begin your journey!")
+        with col2:
+            if st.button("➕ Create First Quest", use_container_width=True):
+                st.switch_page("pages/quests")
     else:
+        # Stats row
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("📊 Total Tasks", len(st.session_state.user_data["daily_tasks"]))
+            st.metric("📊 Tasks", len(st.session_state.user_data["daily_tasks"]))
         
         with col2:
             today_completed = len(get_today_completed())
-            st.metric("✅ Today Completed", f"{today_completed}/{len(st.session_state.user_data['daily_tasks'])}")
+            st.metric("✅ Today", f"{today_completed}/{len(st.session_state.user_data['daily_tasks'])}")
         
         with col3:
             streak = get_completion_streak()
@@ -479,9 +558,26 @@ if page == "Dashboard":
         
         st.divider()
         
-        # Today's Tasks Preview with Categories
+        # Streak visual
+        streak = get_completion_streak()
+        if streak >= 3:
+            st.markdown(f"""
+            <div class='streak-card'>
+            🔥 AMAZING! You're on a {streak}-day streak! 🔥
+            </div>
+            """, unsafe_allow_html=True)
+        elif streak >= 1:
+            st.markdown(f"""
+            <div class='milestone-card'>
+            ⭐ Great start! {streak} day streak going! Keep it up!
+            </div>
+            """, unsafe_allow_html=True)
+        
         st.subheader("📋 Today's Quests")
         today_tasks = get_today_completed()
+        completion_rate = (len(today_tasks) / len(st.session_state.user_data["daily_tasks"])) * 100
+        
+        st.progress(completion_rate / 100, text=f"Progress: {completion_rate:.0f}%")
         
         col1, col2 = st.columns([4, 1])
         with col1:
@@ -541,8 +637,8 @@ if page == "Dashboard":
             fig.update_layout(height=300, showlegend=False)
             st.plotly_chart(fig, use_container_width=True)
 
-# PAGE: Daily Quests
-elif page == "Daily Quests":
+# PAGE: Quests
+elif page == "⚔️ Quests":
     st.subheader("⚔️ Daily Quests")
     st.write(f"**Current Date:** {datetime.now().strftime('%A, %B %d, %Y')}")
     
@@ -558,27 +654,26 @@ elif page == "Daily Quests":
             st.metric("Completion", f"{completion_rate:.0f}%")
     
     with col3:
-        if st.button("📊 Show Summary", key="summary_btn"):
+        if st.button("📊 Summary"):
             st.session_state.show_summary = not st.session_state.get("show_summary", False)
     
     if st.session_state.get("show_summary", False) and len(st.session_state.user_data["daily_tasks"]) > 0:
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.info(f"**Tasks Completed:** {len(today_completed)}")
+            st.info(f"**Tasks:** {len(today_completed)}")
         with col2:
-            total_exp_today = sum(task["exp"] * DIFFICULTY_EXP.get(task["difficulty"], 1) 
-                                 for task in st.session_state.user_data["daily_tasks"] 
-                                 if task["id"] in today_completed)
-            st.info(f"**EXP Earned:** {int(total_exp_today)}")
+            total_exp = sum(task["exp"] * DIFFICULTY_EXP.get(task["difficulty"], 1) 
+                           for task in st.session_state.user_data["daily_tasks"] 
+                           if task["id"] in today_completed)
+            st.info(f"**EXP:** {int(total_exp)}")
         with col3:
             st.info(f"**Streak:** {get_completion_streak()} 🔥")
     
     st.divider()
     
     if len(st.session_state.user_data["daily_tasks"]) == 0:
-        st.info("📝 No quests yet! Add your first quest below to get started.")
+        st.info("📝 No quests yet! Add your first quest below.")
     else:
-        # Display tasks with completion buttons
         for task in st.session_state.user_data["daily_tasks"]:
             if selected_category != "All" and task.get("category") != selected_category:
                 continue
@@ -602,7 +697,7 @@ elif page == "Daily Quests":
             
             with col3:
                 if not is_completed:
-                    if st.button("✅", key=f"task_{task['id']}", help="Complete this task"):
+                    if st.button("✅", key=f"task_{task['id']}"):
                         leveled_up, achievements = mark_task_complete(task['id'])
                         if leveled_up:
                             st.balloons()
@@ -614,7 +709,7 @@ elif page == "Daily Quests":
                     st.write("✔️")
             
             with col4:
-                if st.button("❌", key=f"undo_{task['id']}", help="Undo completion"):
+                if st.button("❌", key=f"undo_{task['id']}"):
                     today = get_today_key()
                     if today in st.session_state.user_data["completion_history"]:
                         if task["id"] in st.session_state.user_data["completion_history"][today]:
@@ -623,7 +718,7 @@ elif page == "Daily Quests":
                             st.rerun()
             
             with col5:
-                if st.button("🗑️", key=f"delete_{task['id']}", help="Delete this task"):
+                if st.button("🗑️", key=f"delete_{task['id']}"):
                     st.session_state.user_data["daily_tasks"] = [
                         t for t in st.session_state.user_data["daily_tasks"] if t["id"] != task["id"]
                     ]
@@ -632,13 +727,12 @@ elif page == "Daily Quests":
     
     st.divider()
     
-    # Add new task with expandable form
     st.subheader("➕ Add New Quest")
-    with st.expander("Click to create a new quest", expanded=False):
+    with st.expander("Click to create a new quest"):
         col1, col2 = st.columns(2)
         
         with col1:
-            new_task_name = st.text_input("Quest Name", placeholder="e.g., Morning Run, Read 30 minutes")
+            new_task_name = st.text_input("Quest Name", placeholder="e.g., Morning Run")
         
         with col2:
             new_category = st.selectbox("Category", list(CATEGORIES.keys()), key="new_task_category")
@@ -649,83 +743,62 @@ elif page == "Daily Quests":
             new_difficulty = st.selectbox("Difficulty", ["common", "rare", "epic", "legendary"], key="new_task_difficulty")
         
         with col4:
-            new_exp = st.number_input("Base EXP", min_value=5, max_value=200, value=10, step=5, key="new_task_exp")
+            new_exp = st.number_input("Base EXP", min_value=5, max_value=200, value=10, step=5)
         
-        col5, col6 = st.columns([1, 1])
-        
-        with col5:
-            if st.button("✨ Add Quest", type="primary", key="add_quest_btn"):
-                if new_task_name:
-                    new_id = max([t["id"] for t in st.session_state.user_data["daily_tasks"]], default=0) + 1
-                    st.session_state.user_data["daily_tasks"].append({
-                        "id": new_id,
-                        "name": new_task_name,
-                        "difficulty": new_difficulty,
-                        "exp": new_exp,
-                        "category": new_category
-                    })
-                    save_user_data()
-                    st.success(f"Quest '{new_task_name}' added! ⚔️")
-                    st.rerun()
-                else:
-                    st.error("Please enter a quest name!")
+        if st.button("✨ Add Quest", type="primary"):
+            if new_task_name:
+                new_id = max([t["id"] for t in st.session_state.user_data["daily_tasks"]], default=0) + 1
+                st.session_state.user_data["daily_tasks"].append({
+                    "id": new_id,
+                    "name": new_task_name,
+                    "difficulty": new_difficulty,
+                    "exp": new_exp,
+                    "category": new_category
+                })
+                save_user_data()
+                st.success(f"Quest '{new_task_name}' added! ⚔️")
+                st.rerun()
 
 # PAGE: Statistics
-elif page == "Statistics":
+elif page == "📊 Stats":
     st.subheader("📊 Statistics & History")
     
     if len(st.session_state.user_data["completion_history"]) == 0:
-        st.info("📈 Complete some tasks to see your statistics!")
+        st.info("📈 Complete some tasks to see stats!")
     else:
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            total_days = len(st.session_state.user_data["completion_history"])
-            st.metric("📅 Active Days", total_days)
+            st.metric("📅 Days Active", len(st.session_state.user_data["completion_history"]))
         
         with col2:
-            total_tasks_completed = sum(len(tasks) for tasks in st.session_state.user_data["completion_history"].values())
-            st.metric("✅ Total Tasks Completed", total_tasks_completed)
+            st.metric("✅ Total Completed", st.session_state.user_data.get("total_tasks_completed", 0))
         
         with col3:
-            avg_per_day = total_tasks_completed / total_days if total_days > 0 else 0
-            st.metric("📈 Avg Tasks/Day", f"{avg_per_day:.1f}")
+            st.metric("⭐ Total EXP", st.session_state.user_data.get("total_exp_earned", 0))
+        
+        with col4:
+            st.metric("🔥 Best Streak", st.session_state.user_data.get("best_streak", 0))
         
         st.divider()
         
-        # Tabs for different stats
-        tab1, tab2, tab3 = st.tabs(["Activity", "Task Performance", "Category Breakdown"])
+        tab1, tab2, tab3 = st.tabs(["Activity", "Tasks", "Categories"])
         
         with tab1:
-            if st.session_state.user_data["completion_history"]:
-                st.subheader("📅 Last 30 Days Activity")
-                
-                today = datetime.now()
-                heatmap_data = []
-                
-                for i in range(29, -1, -1):
-                    date = (today - timedelta(days=i)).strftime("%Y-%m-%d")
-                    completed = len(st.session_state.user_data["completion_history"].get(date, []))
-                    heatmap_data.append({
-                        "Date": date,
-                        "Tasks": completed,
-                    })
-                
-                df_heatmap = pd.DataFrame(heatmap_data)
-                
-                fig = px.bar(
-                    df_heatmap,
-                    x="Date",
-                    y="Tasks",
-                    color="Tasks",
-                    color_continuous_scale="Viridis"
-                )
-                fig.update_layout(height=300, xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
+            today = datetime.now()
+            heatmap_data = []
+            
+            for i in range(29, -1, -1):
+                date = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+                completed = len(st.session_state.user_data["completion_history"].get(date, []))
+                heatmap_data.append({"Date": date, "Tasks": completed})
+            
+            df_heatmap = pd.DataFrame(heatmap_data)
+            fig = px.bar(df_heatmap, x="Date", y="Tasks", color="Tasks", color_continuous_scale="Viridis")
+            fig.update_layout(height=300, xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
         
         with tab2:
-            st.subheader("🎯 Task Statistics")
-            
             task_completion = defaultdict(int)
             for date, task_ids in st.session_state.user_data["completion_history"].items():
                 for task_id in task_ids:
@@ -734,28 +807,18 @@ elif page == "Statistics":
             if task_completion and len(st.session_state.user_data["daily_tasks"]) > 0:
                 stats_data = []
                 for task in st.session_state.user_data["daily_tasks"]:
-                    completed = task_completion.get(task["id"], 0)
                     stats_data.append({
                         "Quest": task["name"],
-                        "Completed": completed,
+                        "Completed": task_completion.get(task["id"], 0),
                         "Difficulty": task["difficulty"]
                     })
                 
                 df_stats = pd.DataFrame(stats_data).sort_values("Completed", ascending=False)
-                
-                fig = px.bar(
-                    df_stats,
-                    x="Quest",
-                    y="Completed",
-                    color="Difficulty",
-                    color_discrete_map=DIFFICULTY_COLORS
-                )
+                fig = px.bar(df_stats, x="Quest", y="Completed", color="Difficulty", color_discrete_map=DIFFICULTY_COLORS)
                 fig.update_layout(height=400)
                 st.plotly_chart(fig, use_container_width=True)
         
         with tab3:
-            st.subheader("📂 Completion by Category")
-            
             category_completion = defaultdict(int)
             for date, task_ids in st.session_state.user_data["completion_history"].items():
                 for task_id in task_ids:
@@ -766,26 +829,26 @@ elif page == "Statistics":
             if category_completion:
                 cat_data = [{"Category": cat, "Count": count} for cat, count in category_completion.items()]
                 df_cat = pd.DataFrame(cat_data)
-                
-                fig = px.pie(df_cat, values="Count", names="Category", title="Completion Distribution")
+                fig = px.pie(df_cat, values="Count", names="Category")
                 st.plotly_chart(fig, use_container_width=True)
 
 # PAGE: Achievements
-elif page == "Achievements":
+elif page == "🏆 Achievements":
     st.subheader("🏆 Achievements & Milestones")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        total_completed = sum(len(tasks) for tasks in st.session_state.user_data["completion_history"].values())
-        st.metric("Total Completed", total_completed)
+        st.metric("✅ Completed", st.session_state.user_data.get("total_tasks_completed", 0))
     
     with col2:
-        achievements_earned = len(st.session_state.user_data["achievements"])
-        st.metric("Achievements", f"{achievements_earned}/{len(ACHIEVEMENTS)}")
+        st.metric("🏅 Achievements", f"{len(st.session_state.user_data['achievements'])}/{len(ACHIEVEMENTS)}")
     
     with col3:
-        st.metric("Current Streak", f"{get_completion_streak()} 🔥")
+        st.metric("🔥 Streak", f"{get_completion_streak()} days")
+    
+    with col4:
+        st.metric("⭐ Level", st.session_state.user_data['level'])
     
     st.divider()
     
@@ -797,217 +860,110 @@ elif page == "Achievements":
             for ach_id in st.session_state.user_data["achievements"]:
                 ach = ACHIEVEMENTS.get(ach_id)
                 if ach:
-                    st.markdown(f"""
-                    <div class='achievement-badge'>
-                    {ach['emoji']} {ach['name']}
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"<div class='achievement-badge'>{ach['emoji']} {ach['name']}</div>", unsafe_allow_html=True)
                     st.caption(ach["description"])
         else:
-            st.info("Start completing tasks to earn achievements!")
+            st.info("🚀 Start completing tasks!")
     
     with col2:
         st.write("### 🎯 Next Achievements")
-        next_found = False
+        next_count = 0
         for ach_id, ach in ACHIEVEMENTS.items():
-            if ach_id not in st.session_state.user_data["achievements"]:
+            if ach_id not in st.session_state.user_data["achievements"] and next_count < 5:
                 st.write(f"**{ach['emoji']} {ach['name']}**")
                 st.caption(ach["description"])
-                next_found = True
-                if not next_found:
-                    break
-        
-        if not next_found:
-            st.success("🎉 You've unlocked all achievements!")
+                next_count += 1
     
     st.divider()
     
-    # Progress towards achievements
-    st.write("### 📈 Progress Towards Achievements")
+    st.write("### 📈 Progress")
+    total_tasks = st.session_state.user_data.get("total_tasks_completed", 0)
+    col1, col2, col3 = st.columns(3)
     
-    total_tasks = sum(len(tasks) for tasks in st.session_state.user_data["completion_history"].values())
-    
-    cols = st.columns(2)
-    
-    with cols[0]:
-        st.write("**Tasks Completed Progress**")
+    with col1:
         st.progress(min(total_tasks / 100, 1.0), text=f"{total_tasks}/100")
-        st.caption("Milestone: 100 tasks for 'Unstoppable'")
+        st.caption("Unstoppable")
     
-    with cols[1]:
-        st.write("**Streak Progress**")
+    with col2:
         streak = get_completion_streak()
-        st.progress(min(streak / 7, 1.0), text=f"{streak}/7 days")
-        st.caption("Milestone: 7-day streak for 'On Fire'")
+        st.progress(min(streak / 30, 1.0), text=f"{streak}/30")
+        st.caption("Month Streak")
+    
+    with col3:
+        st.progress(st.session_state.user_data['rank_points'] / 5000, text=f"{st.session_state.user_data['rank_points']}/5000")
+        st.caption("Legend Rank")
 
 # PAGE: Data Manager
-elif page == "Data Manager":
+elif page == "💾 Data":
     st.subheader("💾 Data Management")
     
-    tab1, tab2, tab3 = st.tabs(["Save/Load", "Download/Upload", "Multiple Saves"])
+    tab1, tab2 = st.tabs(["Save/Load", "Download/Upload"])
     
     with tab1:
-        st.write("### Auto-Save Feature")
-        st.info("Your data is automatically saved when you complete tasks, add quests, or make changes.")
-        
         col1, col2 = st.columns(2)
-        
         with col1:
-            if st.button("💾 Save Current Data", use_container_width=True):
-                success, result = save_user_data()
-                if success:
-                    st.session_state.user_data["last_saved"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    st.success(f"✅ Data saved successfully!\nLocation: {result}")
-                else:
-                    st.error(f"❌ Save failed: {result}")
+            if st.button("💾 Save Now", use_container_width=True):
+                save_user_data()
+                st.session_state.user_data["last_saved"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                st.success("✅ Saved!")
         
         with col2:
-            if st.button("📥 Load Saved Data", use_container_width=True):
+            if st.button("📥 Load Now", use_container_width=True):
                 loaded = load_user_data()
                 if loaded:
                     st.session_state.user_data = loaded
-                    st.success("✅ Data loaded successfully!")
+                    st.success("✅ Loaded!")
                     st.rerun()
-                else:
-                    st.warning("⚠️ No saved data found")
-        
-        st.divider()
         
         if st.session_state.user_data.get("last_saved"):
-            st.markdown(f"**Last Saved:** {st.session_state.user_data['last_saved']}")
+            st.caption(f"Last saved: {st.session_state.user_data['last_saved']}")
     
     with tab2:
-        st.write("### Download & Upload Data")
-        
         col1, col2 = st.columns(2)
-        
         with col1:
-            st.write("#### 📥 Download Your Data")
             json_data = json.dumps(st.session_state.user_data, indent=4)
-            st.download_button(
-                label="📥 Download as JSON",
-                data=json_data,
-                file_name=f"tracker_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                mime="application/json"
-            )
-            st.caption("Download your data as a JSON file for backup or sharing")
+            st.download_button("📥 Download JSON", json_data, file_name=f"tracker_{datetime.now().strftime('%Y%m%d')}.json", mime="application/json")
         
         with col2:
-            st.write("#### 📤 Upload Your Data")
-            uploaded_file = st.file_uploader("Upload a saved JSON file", type="json")
-            
-            if uploaded_file is not None:
+            uploaded = st.file_uploader("📤 Upload JSON", type="json")
+            if uploaded:
                 try:
-                    uploaded_data = json.load(uploaded_file)
-                    if st.button("✅ Load Uploaded Data", key="load_upload"):
+                    uploaded_data = json.load(uploaded)
+                    if st.button("Load Uploaded", key="load_upload"):
                         st.session_state.user_data = uploaded_data
                         save_user_data()
-                        st.success("✅ Data loaded from file!")
+                        st.success("✅ Loaded!")
                         st.rerun()
-                except json.JSONDecodeError:
-                    st.error("❌ Invalid JSON file")
-    
-    with tab3:
-        st.write("### Manage Multiple Saves")
-        
-        saved_files = get_saved_files()
-        
-        if saved_files:
-            st.write(f"**Found {len(saved_files)} save file(s):**")
-            
-            for filename in saved_files:
-                col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-                
-                with col1:
-                    st.write(f"📁 {filename}")
-                
-                with col2:
-                    if st.button("📂 Load", key=f"load_{filename}"):
-                        with open(os.path.join(DATA_DIR, filename), 'r') as f:
-                            loaded = json.load(f)
-                        st.session_state.user_data = loaded
-                        st.success(f"Loaded {filename}")
-                        st.rerun()
-                
-                with col3:
-                    if st.button("💾 Save As", key=f"saveas_{filename}"):
-                        new_name = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                        with open(os.path.join(DATA_DIR, new_name), 'w') as f:
-                            json.dump(st.session_state.user_data, f, indent=4)
-                        st.success(f"Saved as {new_name}")
-                
-                with col4:
-                    if st.button("🗑️", key=f"delete_{filename}"):
-                        if delete_save_file(filename):
-                            st.success(f"Deleted {filename}")
-                            st.rerun()
-        else:
-            st.info("No save files found yet. Save your progress to create one!")
+                except:
+                    st.error("Invalid JSON")
 
 # PAGE: Settings
-elif page == "Settings":
+elif page == "⚙️ Settings":
     st.subheader("⚙️ Settings")
     
-    tab1, tab2, tab3 = st.tabs(["Profile", "Manage Tasks", "Advanced"])
+    tab1, tab2 = st.tabs(["Profile", "Advanced"])
     
     with tab1:
         col1, col2 = st.columns(2)
-        
         with col1:
-            st.write("### User Profile")
-            username = st.text_input("Username", value="Adventurer", key="username_input")
-            
+            st.write("### Profile")
+            username = st.text_input("Username", "Adventurer")
             if st.session_state.user_data.get("last_level_up"):
-                st.caption(f"⏰ Last level up: {st.session_state.user_data['last_level_up']}")
+                st.caption(f"Last level up: {st.session_state.user_data['last_level_up']}")
         
         with col2:
-            st.write("### Quick Stats")
-            total_exp = sum(len(tasks) for tasks in st.session_state.user_data["completion_history"].values()) * 10
+            st.write("### Stats")
             col_a, col_b = st.columns(2)
             with col_a:
-                st.metric("Total EXP Earned", int(total_exp))
+                st.metric("Total EXP", st.session_state.user_data.get("total_exp_earned", 0))
             with col_b:
                 st.metric("Days Active", len(st.session_state.user_data["completion_history"]))
     
     with tab2:
-        st.write("### Manage Your Quests")
-        
-        if len(st.session_state.user_data["daily_tasks"]) > 0:
-            task_to_edit = st.selectbox("Select a quest to manage", 
-                                         [t["name"] for t in st.session_state.user_data["daily_tasks"]])
-            
-            selected_task = next((t for t in st.session_state.user_data["daily_tasks"] if t["name"] == task_to_edit), None)
-            
-            if selected_task:
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    if st.button(f"🗑️ Delete '{task_to_edit}'", type="secondary"):
-                        st.session_state.user_data["daily_tasks"] = [
-                            t for t in st.session_state.user_data["daily_tasks"] if t["id"] != selected_task["id"]
-                        ]
-                        save_user_data()
-                        st.success("Quest deleted!")
-                        st.rerun()
-                
-                with col2:
-                    if st.button(f"📋 View Details", key="view_details"):
-                        st.json(selected_task)
-                
-                with col3:
-                    st.write("")
-        else:
-            st.info("No quests to manage yet. Create one in Daily Quests!")
-    
-    with tab3:
-        st.write("### Advanced Settings")
-        
         col1, col2 = st.columns(2)
-        
         with col1:
-            st.write("**Reset Data**")
-            if st.button("🔄 Reset All Progress", type="secondary"):
-                if st.checkbox("I understand this will delete ALL progress"):
+            if st.button("🔄 Reset Progress", type="secondary"):
+                if st.checkbox("Confirm reset"):
                     st.session_state.user_data = {
                         "current_season": 1,
                         "level": 1,
@@ -1020,58 +976,39 @@ elif page == "Settings":
                         "achievements": [],
                         "last_level_up": None,
                         "last_saved": None,
+                        "total_tasks_completed": 0,
+                        "total_exp_earned": 0,
+                        "best_streak": 0,
                         "setup_complete": False
                     }
                     save_user_data()
-                    st.success("Progress reset! All data cleared.")
                     st.rerun()
         
         with col2:
-            st.write("**Season Management**")
-            new_season = st.selectbox("Change Season", list(SEASONS.keys()), key="season_select")
-            
-            if st.button("🎮 Start New Season", type="secondary"):
+            new_season = st.selectbox("Season", list(SEASONS.keys()))
+            if st.button("🎮 New Season", type="secondary"):
                 st.session_state.user_data["current_season"] = new_season
                 st.session_state.user_data["level"] = 1
                 st.session_state.user_data["experience"] = 0
                 st.session_state.user_data["rank_points"] = 0
                 st.session_state.user_data["completion_history"] = {}
-                st.session_state.user_data["achievements"] = []
                 save_user_data()
-                st.success(f"Started Season {new_season}: {SEASONS[new_season]['name']}!")
                 st.rerun()
         
         st.divider()
-        
-        st.write("### About")
         st.info("""
-        **Daily Tracker - Leveling System v4.0**
+        **Daily Tracker v5.0** 🚀
         
-        A gamified daily habit tracker inspired by:
-        - 🎮 PUBG Ranking System
-        - ⚡ Solo Leveling (Sung Jinwoo's Awakening System)
-        
-        **Enhanced Features:**
-        - 📂 Task Categories with filtering
-        - 🏆 8+ Achievement System with progress tracking
-        - 🎯 Advanced Statistics & Analytics
-        - 📊 Interactive Charts & Visualizations
-        - ⚙️ Complete Quest Management
-        - 🔄 Undo Task Completion
-        - ✨ Level-up Celebrations
-        - 🎨 Beautiful UI with Animations
-        - **💾 Persistent Data Storage with JSON**
-        - **📥 Download/Upload Functionality**
-        - **📁 Multiple Save File Management**
-        
-        **Original Features:**
-        - 🎮 8-Tier Ranking System with emojis
-        - ⚡ Level Up Progression
-        - 🎯 Daily Quests with Multiple Difficulties
-        - 📊 Statistics & Progress Tracking
+        ✨ Features:
+        - 🎮 8-Tier Ranking System
+        - 🏆 10+ Achievements
+        - 📊 Advanced Statistics
+        - 💾 Persistent Data Storage
+        - 🎁 Daily Bonus Rewards
+        - 📈 Progress Tracking
         - 🔥 Streak Counter
-        - 🏆 Season Rotation
+        - 💪 Motivation & Inspiration
         """)
 
 st.sidebar.divider()
-st.sidebar.write("**Made by Mohd Zeeshan Khan  ⚔️ for Daily Champions**")
+st.sidebar.write("**Made with ⚔️ for Daily Champions**")
