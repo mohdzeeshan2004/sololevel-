@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from collections import defaultdict
 import math
+import os
 
 # Set page config
 st.set_page_config(
@@ -133,24 +134,89 @@ st.markdown("""
         text-align: center;
         margin: 5px 0;
     }
+    .save-status {
+        padding: 10px;
+        border-radius: 5px;
+        margin: 5px 0;
+    }
+    .save-success {
+        background-color: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+    .save-warning {
+        background-color: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+    }
     </style>
 """, unsafe_allow_html=True)
 
+# Data storage utilities
+DATA_DIR = "user_data"
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
+
+def save_user_data(filename="tracker_data.json"):
+    """Save user data to JSON file"""
+    try:
+        filepath = os.path.join(DATA_DIR, filename)
+        with open(filepath, 'w') as f:
+            json.dump(st.session_state.user_data, f, indent=4)
+        return True, filepath
+    except Exception as e:
+        return False, str(e)
+
+def load_user_data(filename="tracker_data.json"):
+    """Load user data from JSON file"""
+    try:
+        filepath = os.path.join(DATA_DIR, filename)
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as f:
+                return json.load(f)
+        return None
+    except Exception as e:
+        return None
+
+def get_saved_files():
+    """Get list of all saved data files"""
+    try:
+        files = [f for f in os.listdir(DATA_DIR) if f.endswith('.json')]
+        return files
+    except:
+        return []
+
+def delete_save_file(filename):
+    """Delete a saved data file"""
+    try:
+        filepath = os.path.join(DATA_DIR, filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            return True
+    except:
+        return False
+
 # Initialize session state
 if "user_data" not in st.session_state:
-    st.session_state.user_data = {
-        "current_season": 1,
-        "level": 1,
-        "experience": 0,
-        "exp_needed": 100,
-        "rank": "BRONZE",
-        "rank_points": 0,
-        "daily_tasks": [],
-        "completion_history": {},
-        "achievements": [],
-        "last_level_up": None,
-        "setup_complete": False
-    }
+    # Try to load existing data
+    loaded_data = load_user_data()
+    if loaded_data:
+        st.session_state.user_data = loaded_data
+    else:
+        st.session_state.user_data = {
+            "current_season": 1,
+            "level": 1,
+            "experience": 0,
+            "exp_needed": 100,
+            "rank": "BRONZE",
+            "rank_points": 0,
+            "daily_tasks": [],
+            "completion_history": {},
+            "achievements": [],
+            "last_level_up": None,
+            "last_saved": None,
+            "setup_complete": False
+        }
 
 # Rank system (similar to PUBG)
 RANK_SYSTEM = [
@@ -317,9 +383,37 @@ def get_completion_streak():
     
     return streak
 
-# Sidebar Navigation
+# Sidebar Navigation with Save/Load
 st.sidebar.title("⚔️ Daily Tracker")
-page = st.sidebar.radio("Navigation", ["Dashboard", "Daily Quests", "Statistics", "Achievements", "Settings"])
+
+# Auto-save reminder
+col_save1, col_save2 = st.sidebar.columns(2)
+with col_save1:
+    if st.button("💾 Save Data", key="save_btn", use_container_width=True):
+        success, result = save_user_data()
+        if success:
+            st.session_state.user_data["last_saved"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.sidebar.success(f"✅ Data saved!")
+        else:
+            st.sidebar.error(f"❌ Save failed: {result}")
+
+with col_save2:
+    if st.button("📥 Load Data", key="load_btn", use_container_width=True):
+        loaded = load_user_data()
+        if loaded:
+            st.session_state.user_data = loaded
+            st.sidebar.success("✅ Data loaded!")
+            st.rerun()
+        else:
+            st.sidebar.warning("⚠️ No saved data found")
+
+st.sidebar.divider()
+
+# Show last save time
+if st.session_state.user_data.get("last_saved"):
+    st.sidebar.caption(f"Last saved: {st.session_state.user_data['last_saved']}")
+
+page = st.sidebar.radio("Navigation", ["Dashboard", "Daily Quests", "Statistics", "Achievements", "Data Manager", "Settings"])
 
 # Main Header
 col1, col2, col3 = st.columns([2, 2, 1])
@@ -514,6 +608,7 @@ elif page == "Daily Quests":
                             st.balloons()
                         if achievements:
                             st.success(f"🏆 Achievement unlocked!")
+                        save_user_data()
                         st.rerun()
                 else:
                     st.write("✔️")
@@ -524,6 +619,7 @@ elif page == "Daily Quests":
                     if today in st.session_state.user_data["completion_history"]:
                         if task["id"] in st.session_state.user_data["completion_history"][today]:
                             st.session_state.user_data["completion_history"][today].remove(task["id"])
+                            save_user_data()
                             st.rerun()
             
             with col5:
@@ -531,6 +627,7 @@ elif page == "Daily Quests":
                     st.session_state.user_data["daily_tasks"] = [
                         t for t in st.session_state.user_data["daily_tasks"] if t["id"] != task["id"]
                     ]
+                    save_user_data()
                     st.rerun()
     
     st.divider()
@@ -567,6 +664,7 @@ elif page == "Daily Quests":
                         "exp": new_exp,
                         "category": new_category
                     })
+                    save_user_data()
                     st.success(f"Quest '{new_task_name}' added! ⚔️")
                     st.rerun()
                 else:
@@ -742,6 +840,110 @@ elif page == "Achievements":
         st.progress(min(streak / 7, 1.0), text=f"{streak}/7 days")
         st.caption("Milestone: 7-day streak for 'On Fire'")
 
+# PAGE: Data Manager
+elif page == "Data Manager":
+    st.subheader("💾 Data Management")
+    
+    tab1, tab2, tab3 = st.tabs(["Save/Load", "Download/Upload", "Multiple Saves"])
+    
+    with tab1:
+        st.write("### Auto-Save Feature")
+        st.info("Your data is automatically saved when you complete tasks, add quests, or make changes.")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("💾 Save Current Data", use_container_width=True):
+                success, result = save_user_data()
+                if success:
+                    st.session_state.user_data["last_saved"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    st.success(f"✅ Data saved successfully!\nLocation: {result}")
+                else:
+                    st.error(f"❌ Save failed: {result}")
+        
+        with col2:
+            if st.button("📥 Load Saved Data", use_container_width=True):
+                loaded = load_user_data()
+                if loaded:
+                    st.session_state.user_data = loaded
+                    st.success("✅ Data loaded successfully!")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ No saved data found")
+        
+        st.divider()
+        
+        if st.session_state.user_data.get("last_saved"):
+            st.markdown(f"**Last Saved:** {st.session_state.user_data['last_saved']}")
+    
+    with tab2:
+        st.write("### Download & Upload Data")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("#### 📥 Download Your Data")
+            json_data = json.dumps(st.session_state.user_data, indent=4)
+            st.download_button(
+                label="📥 Download as JSON",
+                data=json_data,
+                file_name=f"tracker_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
+            st.caption("Download your data as a JSON file for backup or sharing")
+        
+        with col2:
+            st.write("#### 📤 Upload Your Data")
+            uploaded_file = st.file_uploader("Upload a saved JSON file", type="json")
+            
+            if uploaded_file is not None:
+                try:
+                    uploaded_data = json.load(uploaded_file)
+                    if st.button("✅ Load Uploaded Data", key="load_upload"):
+                        st.session_state.user_data = uploaded_data
+                        save_user_data()
+                        st.success("✅ Data loaded from file!")
+                        st.rerun()
+                except json.JSONDecodeError:
+                    st.error("❌ Invalid JSON file")
+    
+    with tab3:
+        st.write("### Manage Multiple Saves")
+        
+        saved_files = get_saved_files()
+        
+        if saved_files:
+            st.write(f"**Found {len(saved_files)} save file(s):**")
+            
+            for filename in saved_files:
+                col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+                
+                with col1:
+                    st.write(f"📁 {filename}")
+                
+                with col2:
+                    if st.button("📂 Load", key=f"load_{filename}"):
+                        with open(os.path.join(DATA_DIR, filename), 'r') as f:
+                            loaded = json.load(f)
+                        st.session_state.user_data = loaded
+                        st.success(f"Loaded {filename}")
+                        st.rerun()
+                
+                with col3:
+                    if st.button("💾 Save As", key=f"saveas_{filename}"):
+                        new_name = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                        with open(os.path.join(DATA_DIR, new_name), 'w') as f:
+                            json.dump(st.session_state.user_data, f, indent=4)
+                        st.success(f"Saved as {new_name}")
+                
+                with col4:
+                    if st.button("🗑️", key=f"delete_{filename}"):
+                        if delete_save_file(filename):
+                            st.success(f"Deleted {filename}")
+                            st.rerun()
+        else:
+            st.info("No save files found yet. Save your progress to create one!")
+
 # PAGE: Settings
 elif page == "Settings":
     st.subheader("⚙️ Settings")
@@ -784,6 +986,7 @@ elif page == "Settings":
                         st.session_state.user_data["daily_tasks"] = [
                             t for t in st.session_state.user_data["daily_tasks"] if t["id"] != selected_task["id"]
                         ]
+                        save_user_data()
                         st.success("Quest deleted!")
                         st.rerun()
                 
@@ -816,8 +1019,10 @@ elif page == "Settings":
                         "completion_history": {},
                         "achievements": [],
                         "last_level_up": None,
+                        "last_saved": None,
                         "setup_complete": False
                     }
+                    save_user_data()
                     st.success("Progress reset! All data cleared.")
                     st.rerun()
         
@@ -832,6 +1037,7 @@ elif page == "Settings":
                 st.session_state.user_data["rank_points"] = 0
                 st.session_state.user_data["completion_history"] = {}
                 st.session_state.user_data["achievements"] = []
+                save_user_data()
                 st.success(f"Started Season {new_season}: {SEASONS[new_season]['name']}!")
                 st.rerun()
         
@@ -839,7 +1045,7 @@ elif page == "Settings":
         
         st.write("### About")
         st.info("""
-        **Daily Tracker - Leveling System v3.0**
+        **Daily Tracker - Leveling System v4.0**
         
         A gamified daily habit tracker inspired by:
         - 🎮 PUBG Ranking System
@@ -854,6 +1060,9 @@ elif page == "Settings":
         - 🔄 Undo Task Completion
         - ✨ Level-up Celebrations
         - 🎨 Beautiful UI with Animations
+        - **💾 Persistent Data Storage with JSON**
+        - **📥 Download/Upload Functionality**
+        - **📁 Multiple Save File Management**
         
         **Original Features:**
         - 🎮 8-Tier Ranking System with emojis
