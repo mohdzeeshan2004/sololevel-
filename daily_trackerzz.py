@@ -1011,4 +1011,4 @@ elif page == "⚙️ Settings":
         """)
 
 st.sidebar.divider()
-st.sidebar.write("**Made with ⚔️ for Daily Champions**")
+st.sidebar.write("**Made by Mohd Zeeshan Khan ⚔️ for Daily Champions**")
